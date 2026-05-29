@@ -1,3 +1,7 @@
+// ======================================================
+// Transaction Types
+// ======================================================
+
 export const TRANSACTION_TYPES = {
   WALLET_FUNDING: "wallet_funding",
 
@@ -9,12 +13,18 @@ export const TRANSACTION_TYPES = {
 
   CABLE_PURCHASE: "cable_purchase",
 
+  BETTING_PURCHASE: "betting_purchase",
+
   TRANSFER: "transfer",
 
   REFERRAL_BONUS: "referral_bonus",
 
   REVERSAL: "reversal",
 };
+
+// ======================================================
+// Transaction Status
+// ======================================================
 
 export const TRANSACTION_STATUS = {
   PENDING: "pending",
@@ -28,6 +38,10 @@ export const TRANSACTION_STATUS = {
   REVERSED: "reversed",
 };
 
+// ======================================================
+// User Roles
+// ======================================================
+
 export const USER_ROLES = {
   USER: "user",
 
@@ -35,6 +49,10 @@ export const USER_ROLES = {
 
   AGENT: "agent",
 };
+
+// ======================================================
+// Mobile Networks
+// ======================================================
 
 export const NETWORKS = {
   MTN: "mtn",
@@ -45,6 +63,10 @@ export const NETWORKS = {
 
   ETISALAT: "etisalat",
 };
+
+// ======================================================
+// VTpass Service IDs
+// ======================================================
 
 export const VTPASS_SERVICE_IDS = {
   // Data
@@ -64,9 +86,32 @@ export const VTPASS_SERVICE_IDS = {
   AIRTEL_AIRTIME: "airtel",
 
   ETISALAT_AIRTIME: "etisalat",
+
+  // Cable
+  DSTV: "dstv",
+
+  GOTV: "gotv",
+
+  STARTIMES: "startimes",
+
+  // Electricity
+  IKEDC: "ikeja-electric",
+
+  EKEDC: "eko-electric",
+
+  AEDC: "abuja-electric",
+
+  KEDCO: "kano-electric",
+
+  IBEDC: "ibadan-electric",
+
+  PHED: "portharcourt-electric",
 };
 
-// Airtime limits per network
+// ======================================================
+// Airtime Limits
+// ======================================================
+
 export const AIRTIME_LIMITS = {
   mtn: {
     min: 50,
@@ -89,7 +134,10 @@ export const AIRTIME_LIMITS = {
   },
 };
 
-// Airtime discount rates
+// ======================================================
+// Airtime Discount Rates
+// ======================================================
+
 export const AIRTIME_DISCOUNT_RATES = {
   mtn: 0.03,
 
@@ -100,7 +148,54 @@ export const AIRTIME_DISCOUNT_RATES = {
   etisalat: 0.03,
 };
 
-// Referral constants
+// ======================================================
+// Cable Providers
+// ======================================================
+
+export const CABLE_PROVIDERS = {
+  DSTV: "dstv",
+
+  GOTV: "gotv",
+
+  STARTIMES: "startimes",
+};
+
+// ======================================================
+// Electricity Providers
+// ======================================================
+
+export const ELECTRICITY_PROVIDERS = {
+  IKEDC: "ikeja-electric",
+
+  EKEDC: "eko-electric",
+
+  AEDC: "abuja-electric",
+
+  KEDCO: "kano-electric",
+
+  IBEDC: "ibadan-electric",
+
+  PHED: "portharcourt-electric",
+};
+
+// ======================================================
+// Betting Providers
+// ======================================================
+
+export const BETTING_PROVIDERS = {
+  BET9JA: "bet9ja",
+
+  SPORTYBET: "sportybet",
+
+  NAIRABET: "nairabet",
+
+  MERRYBET: "merrybet",
+};
+
+// ======================================================
+// Referral Settings
+// ======================================================
+
 export const REFERRAL_BONUS_AMOUNT = 100;
 
 export const REFERRAL_SETTINGS = {
@@ -113,7 +208,10 @@ export const REFERRAL_SETTINGS = {
   maxReferralsPerDay: 20,
 };
 
-// Wallet limits
+// ======================================================
+// Wallet Limits
+// ======================================================
+
 export const MIN_WALLET_FUND = 100;
 
 export const MAX_WALLET_FUND = 1000000;
