@@ -19,6 +19,8 @@ export const TRANSACTION_TYPES = {
 
   REFERRAL_BONUS: "referral_bonus",
 
+  COMMISSION: "commission",
+
   REVERSAL: "reversal",
 };
 
@@ -51,7 +53,7 @@ export const USER_ROLES = {
 };
 
 // ======================================================
-// Mobile Networks
+// Networks
 // ======================================================
 
 export const NETWORKS = {
@@ -106,6 +108,15 @@ export const VTPASS_SERVICE_IDS = {
   IBEDC: "ibadan-electric",
 
   PHED: "portharcourt-electric",
+
+  // Betting
+  BET9JA: "bet9ja",
+
+  SPORTYBET: "sportybet",
+
+  NAIRABET: "nairabet",
+
+  MERRYBET: "merrybet",
 };
 
 // ======================================================
@@ -146,6 +157,22 @@ export const AIRTIME_DISCOUNT_RATES = {
   airtel: 0.03,
 
   etisalat: 0.03,
+};
+
+// ======================================================
+// Commission Rates
+// ======================================================
+
+export const COMMISSION_RATES = {
+  data: 0.03,
+
+  airtime: 0.02,
+
+  electricity: 0.015,
+
+  cable: 0.02,
+
+  betting: 0.01,
 };
 
 // ======================================================
@@ -215,3 +242,32 @@ export const REFERRAL_SETTINGS = {
 export const MIN_WALLET_FUND = 100;
 
 export const MAX_WALLET_FUND = 1000000;
+
+// ======================================================
+// API Settings
+// ======================================================
+
+export const API_TIMEOUT = 30000;
+
+// ======================================================
+// Pagination
+// ======================================================
+
+export const DEFAULT_PAGE_SIZE = 20;
+
+export const MAX_PAGE_SIZE = 100;
+
+// ======================================================
+// Supported Currencies
+// ======================================================
+
+export const CURRENCIES = {
+  NGN: "NGN",
+};
+
+// ======================================================
+// Environment
+// ======================================================
+
+export const IS_PRODUCTION =
+  process.env.NODE_ENV === "production";
