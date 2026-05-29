@@ -1,33 +1,58 @@
+// services/airtime.service.js
+
 import axios from "axios";
+
 import config from "../config/env.js";
-import { generateReference } from "../utils/generateReference.js";
-import { debitWallet, creditWallet } from "./wallet.service.js";
+
+import {
+  getClient,
+  withTransaction,
+  query,
+} from "../database/db.js";
+
 import {
   createTransaction,
   updateTransactionStatus,
   checkIdempotency,
 } from "./transaction.service.js";
-import { getClient, withTransaction } from "../database/db.js";
+
+import {
+  debitWallet,
+  creditWallet,
+} from "./wallet.service.js";
+
+import { payFirstPurchaseBonus } from "./referral.service.js";
+
 import {
   TRANSACTION_TYPES,
   TRANSACTION_STATUS,
   VTPASS_SERVICE_IDS,
-  AIRTIME_DISCOUNT_RATES,
 } from "../config/constants.js";
+
+import { generateReference } from "../utils/generateReference.js";
+
 import logger from "../utils/logger.js";
 
-// VTpass axios instance
+/* -------------------------------------------------------------------------- */
+/*                               VTPASS CLIENT                                */
+/* -------------------------------------------------------------------------- */
+
 const vtpassApi = axios.create({
   baseURL: config.vtpass.baseUrl,
+
   headers: {
     "api-key": config.vtpass.apiKey,
     "secret-key": config.vtpass.secretKey,
     "Content-Type": "application/json",
   },
+
   timeout: 30000,
 });
 
-// Map network name to VTpass service ID
+/* -------------------------------------------------------------------------- */
+/*                           AIRTIME SERVICE MAP                              */
+/* -------------------------------------------------------------------------- */
+
 const AIRTIME_SERVICE_MAP = {
   mtn: VTPASS_SERVICE_IDS.MTN_AIRTIME,
   glo: VTPASS_SERVICE_IDS.GLO_AIRTIME,
@@ -35,336 +60,617 @@ const AIRTIME_SERVICE_MAP = {
   etisalat: VTPASS_SERVICE_IDS.ETISALAT_AIRTIME,
 };
 
-// ========================
-// Buy Airtime
-// ========================
-export async function buyAirtimeService(userId, data) {
-  const { network, phone, amount, idempotency_key } = data;
+/* -------------------------------------------------------------------------- */
+/*                              BUY AIRTIME                                   */
+/* -------------------------------------------------------------------------- */
 
-  // 1. Idempotency check — prevent duplicate purchases
+export async function buyAirtimeService(
+  userId,
+  data
+) {
+  const {
+    network,
+    phone,
+    amount,
+    idempotency_key,
+  } = data;
+
+  /* -------------------------- IDEMPOTENCY CHECK ------------------------- */
+
   if (idempotency_key) {
-    const existing = await checkIdempotency(idempotency_key);
-    if (existing) {
-      logger.warn("Duplicate airtime transaction detected", {
-        idempotency_key,
-        userId,
-      });
+    const existingTransaction =
+      await checkIdempotency(
+        idempotency_key
+      );
+
+    if (existingTransaction) {
+      logger.warn(
+        "Duplicate airtime transaction detected",
+        {
+          userId,
+          idempotency_key,
+        }
+      );
+
       return {
         success: true,
-        message: "Transaction already processed.",
-        data: existing,
+
+        message:
+          "Transaction already processed.",
+
+        data: existingTransaction,
       };
     }
   }
 
-  // 2. Validate network
-  const serviceID = AIRTIME_SERVICE_MAP[network];
+  /* --------------------------- VALIDATE NETWORK ------------------------- */
+
+  const serviceID =
+    AIRTIME_SERVICE_MAP[
+      network?.toLowerCase()
+    ];
+
   if (!serviceID) {
-    throw new Error("Invalid network selected.");
+    throw new Error(
+      "Invalid network selected."
+    );
   }
 
-  const reference = generateReference("AIR");
+  /* -------------------------- NORMALIZE PHONE --------------------------- */
 
-  // 3. Normalize phone number for VTpass
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone =
+    normalizePhone(phone);
+
+  /* -------------------------- GENERATE REF ------------------------------ */
+
+  const reference =
+    generateReference("AIR");
+
+  /* --------------------------- DB TRANSACTION --------------------------- */
 
   const client = await getClient();
 
   try {
     await client.query("BEGIN");
 
-    // 4. Debit wallet (with row-level locking)
-    const walletResult = await debitWallet(userId, amount, client);
+    /* ---------------------------- DEBIT WALLET -------------------------- */
 
-    // 5. Create PROCESSING transaction
-    const transaction = await createTransaction(
-      {
-        user_id: userId,
-        reference,
-        type: TRANSACTION_TYPES.AIRTIME_PURCHASE,
+    const walletResult =
+      await debitWallet(
+        userId,
         amount,
-        fee: 0,
-        total_amount: amount,
-        balance_before: walletResult.balance_before,
-        balance_after: walletResult.balance_after,
-        status: TRANSACTION_STATUS.PROCESSING,
-        provider: "vtpass",
-        metadata: {
-          network,
-          phone: normalizedPhone,
-          serviceID,
-          original_phone: phone,
+        client
+      );
+
+    /* ---------------------- CREATE TRANSACTION -------------------------- */
+
+    const transaction =
+      await createTransaction(
+        {
+          user_id: userId,
+
+          reference,
+
+          type:
+            TRANSACTION_TYPES.AIRTIME_PURCHASE,
+
+          amount,
+
+          fee: 0,
+
+          total_amount: amount,
+
+          balance_before:
+            walletResult.balance_before,
+
+          balance_after:
+            walletResult.balance_after,
+
+          status:
+            TRANSACTION_STATUS.PROCESSING,
+
+          provider: "vtpass",
+
+          metadata: {
+            network,
+            phone: normalizedPhone,
+            original_phone: phone,
+            serviceID,
+          },
+
+          description: `${network.toUpperCase()} airtime recharge for ${normalizedPhone}`,
+
+          idempotency_key:
+            idempotency_key || null,
         },
-        description: `${network.toUpperCase()} airtime recharge for ${phone}`,
-        idempotency_key: idempotency_key || null,
-      },
-      client
-    );
+
+        client
+      );
 
     await client.query("COMMIT");
 
-    // 6. Call VTpass API (outside DB transaction)
+    /* ---------------------------- CALL VTPASS --------------------------- */
+
     let vtpassResponse;
 
     try {
-      vtpassResponse = await vtpassApi.post("/pay", {
-        request_id: reference,
-        serviceID,
-        amount,
-        phone: normalizedPhone,
-      });
+      vtpassResponse =
+        await vtpassApi.post(
+          "/pay",
+          {
+            request_id: reference,
 
-      logger.info("VTpass airtime response", {
-        reference,
-        network,
-        amount,
-        code: vtpassResponse.data?.code,
-        response: vtpassResponse.data,
-      });
+            serviceID,
+
+            amount,
+
+            phone:
+              normalizedPhone,
+          }
+        );
+
+      logger.info(
+        "VTpass airtime API response",
+        {
+          reference,
+          network,
+          amount,
+          response:
+            vtpassResponse.data,
+        }
+      );
     } catch (apiError) {
-      // VTpass unreachable — reverse wallet debit
-      logger.error("VTpass airtime API call failed", {
-        reference,
-        error: apiError.message,
-      });
+      logger.error(
+        "VTpass airtime API failed",
+        {
+          reference,
+          error:
+            apiError.message,
+        }
+      );
+
+      /* ---------------------- REVERSE TRANSACTION ---------------------- */
 
       await reverseAirtimeTransaction(
-        userId,
-        reference,
-        amount,
-        walletResult
+        {
+          userId,
+          reference,
+          amount,
+          walletResult,
+        }
       );
 
       throw new Error(
-        "Airtime purchase failed. Your wallet has been refunded."
+        "Airtime purchase failed. Wallet refunded."
       );
     }
 
-    // 7. Handle VTpass response codes
-    return await handleVtpassAirtimeResponse(
-      vtpassResponse.data,
-      {
-        userId,
+    /* ------------------------- HANDLE RESPONSE -------------------------- */
+
+    const vtpassCode =
+      vtpassResponse.data?.code;
+
+    const providerTransactionId =
+      vtpassResponse.data?.content
+        ?.transactions
+        ?.transactionId || null;
+
+    /* ----------------------------- SUCCESS ------------------------------ */
+
+    if (vtpassCode === "000") {
+      await updateTransactionStatus(
         reference,
-        network,
-        phone: normalizedPhone,
-        amount,
-        walletResult,
+        TRANSACTION_STATUS.SUCCESS,
+        providerTransactionId
+      );
+
+      /* ---------------- FIRST PURCHASE BONUS ---------------- */
+
+      triggerFirstPurchaseBonus(
+        userId,
+        transaction.id
+      );
+
+      logger.info(
+        "Airtime purchase successful",
+        {
+          userId,
+          reference,
+          amount,
+          network,
+        }
+      );
+
+      return {
+        success: true,
+
+        message:
+          "Airtime purchase successful.",
+
+        data: {
+          reference,
+
+          network:
+            network.toUpperCase(),
+
+          phone:
+            normalizedPhone,
+
+          amount,
+
+          balance:
+            walletResult.balance_after,
+
+          status: "success",
+
+          provider_reference:
+            providerTransactionId,
+        },
+      };
+    }
+
+    /* ------------------------------ PENDING ----------------------------- */
+
+    if (vtpassCode === "099") {
+      await updateTransactionStatus(
+        reference,
+        TRANSACTION_STATUS.PENDING
+      );
+
+      logger.warn(
+        "Airtime transaction pending",
+        {
+          reference,
+          userId,
+        }
+      );
+
+      return {
+        success: true,
+
+        message:
+          "Airtime purchase is being processed.",
+
+        data: {
+          reference,
+
+          network:
+            network.toUpperCase(),
+
+          phone:
+            normalizedPhone,
+
+          amount,
+
+          balance:
+            walletResult.balance_after,
+
+          status: "pending",
+        },
+      };
+    }
+
+    /* ------------------------------- FAILED ----------------------------- */
+
+    const failureMessage =
+      vtpassResponse.data
+        ?.response_description ||
+      "Airtime purchase failed.";
+
+    logger.error(
+      "VTpass airtime failed",
+      {
+        reference,
+        failureMessage,
       }
     );
+
+    await reverseAirtimeTransaction({
+      userId,
+      reference,
+      amount,
+      walletResult,
+    });
+
+    throw new Error(
+      `${failureMessage} Wallet refunded.`
+    );
   } catch (error) {
-    // Rollback if DB transaction still open
     try {
       await client.query("ROLLBACK");
-    } catch (_) {
-      // Already committed or rolled back
-    }
+    } catch (_) {}
+
+    logger.error(
+      "Buy airtime service failed",
+      {
+        userId,
+        error: error.message,
+      }
+    );
+
     throw error;
   } finally {
     client.release();
   }
 }
 
-// ========================
-// Handle VTpass Response
-// ========================
-async function handleVtpassAirtimeResponse(responseData, context) {
-  const { userId, reference, network, phone, amount, walletResult } = context;
-  const code = responseData?.code;
-  const transactionId =
-    responseData?.content?.transactions?.transactionId || null;
+/* -------------------------------------------------------------------------- */
+/*                       FIRST PURCHASE REFERRAL BONUS                        */
+/* -------------------------------------------------------------------------- */
 
-  // Success
-  if (code === "000") {
-    await updateTransactionStatus(
-      reference,
-      TRANSACTION_STATUS.SUCCESS,
-      transactionId
+async function triggerFirstPurchaseBonus(
+  userId,
+  transactionId
+) {
+  try {
+    const purchaseCount =
+      await query(
+        `
+          SELECT COUNT(*) AS total
+          FROM transactions
+          WHERE user_id = $1
+            AND type IN (
+              'data_purchase',
+              'airtime_purchase',
+              'cable_purchase',
+              'electricity_purchase',
+              'betting_purchase'
+            )
+            AND status = 'success'
+        `,
+        [userId]
+      );
+
+    const totalPurchases =
+      parseInt(
+        purchaseCount.rows[0].total
+      );
+
+    // First successful purchase
+    if (totalPurchases === 1) {
+      await payFirstPurchaseBonus(
+        userId,
+        transactionId
+      );
+
+      logger.info(
+        "First purchase bonus paid",
+        {
+          userId,
+          transactionId,
+        }
+      );
+    }
+  } catch (error) {
+    logger.error(
+      "First purchase bonus failed",
+      {
+        userId,
+        transactionId,
+        error: error.message,
+      }
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                        REVERSE FAILED TRANSACTION                          */
+/* -------------------------------------------------------------------------- */
+
+async function reverseAirtimeTransaction({
+  userId,
+  reference,
+  amount,
+  walletResult,
+}) {
+  try {
+    await withTransaction(
+      async (client) => {
+        /* ---------------------- CREDIT WALLET -------------------------- */
+
+        await creditWallet(
+          userId,
+          amount,
+          client
+        );
+
+        /* ---------------- UPDATE ORIGINAL TXN ------------------------- */
+
+        await updateTransactionStatus(
+          reference,
+          TRANSACTION_STATUS.FAILED,
+          null,
+          client
+        );
+
+        /* ---------------- CREATE REVERSAL RECORD ---------------------- */
+
+        const reversalReference =
+          generateReference("REV");
+
+        await createTransaction(
+          {
+            user_id: userId,
+
+            reference:
+              reversalReference,
+
+            type:
+              TRANSACTION_TYPES.REVERSAL,
+
+            amount,
+
+            fee: 0,
+
+            total_amount: amount,
+
+            balance_before:
+              walletResult.balance_after,
+
+            balance_after:
+              walletResult.balance_before,
+
+            status:
+              TRANSACTION_STATUS.SUCCESS,
+
+            metadata: {
+              original_reference:
+                reference,
+
+              reason:
+                "Airtime purchase failure",
+            },
+
+            description: `Reversal for failed airtime transaction ${reference}`,
+          },
+
+          client
+        );
+      }
     );
 
-    logger.info("Airtime purchase successful", {
-      reference,
-      network,
-      phone,
-      amount,
-    });
-
-    return {
-      success: true,
-      message: "Airtime purchase successful.",
-      data: {
+    logger.info(
+      "Airtime transaction reversed",
+      {
         reference,
-        network: network.toUpperCase(),
-        phone,
         amount,
-        balance: walletResult.balance_after,
-        status: "success",
-        provider_reference: transactionId,
-      },
-    };
-  }
-
-  // Pending / processing
-  if (code === "099") {
-    await updateTransactionStatus(reference, TRANSACTION_STATUS.PENDING);
-
-    logger.warn("Airtime purchase pending", { reference, network, phone });
-
-    return {
-      success: true,
-      message: "Airtime purchase is being processed. Check back shortly.",
-      data: {
-        reference,
-        network: network.toUpperCase(),
-        phone,
-        amount,
-        balance: walletResult.balance_after,
-        status: "pending",
-      },
-    };
-  }
-
-  // Failed — reverse wallet debit
-  const errorMessage =
-    responseData?.response_description ||
-    "Airtime purchase failed.";
-
-  logger.error("VTpass airtime failed", {
-    reference,
-    code,
-    network,
-    errorMessage,
-  });
-
-  await reverseAirtimeTransaction(userId, reference, amount, walletResult);
-
-  throw new Error(`${errorMessage} Your wallet has been refunded.`);
-}
-
-// ========================
-// Reverse Failed Transaction
-// ========================
-async function reverseAirtimeTransaction(userId, reference, amount, originalWallet) {
-  try {
-    await withTransaction(async (client) => {
-      // Credit wallet back
-      const refundedWallet = await creditWallet(userId, amount, client);
-
-      // Mark original as failed
-      await updateTransactionStatus(
-        reference,
-        TRANSACTION_STATUS.FAILED,
-        null,
-        client
-      );
-
-      // Create reversal record
-      const reversalRef = generateReference("REV");
-
-      await createTransaction(
-        {
-          user_id: userId,
-          reference: reversalRef,
-          type: TRANSACTION_TYPES.REVERSAL,
-          amount,
-          fee: 0,
-          total_amount: amount,
-          balance_before: originalWallet.balance_after,
-          balance_after: originalWallet.balance_before,
-          status: TRANSACTION_STATUS.SUCCESS,
-          metadata: {
-            original_reference: reference,
-            reason: "Airtime purchase failed",
-          },
-          description: `Reversal for failed airtime transaction ${reference}`,
-        },
-        client
-      );
-    });
-
-    logger.info("Airtime transaction reversed successfully", {
-      reference,
-      amount,
-      userId,
-    });
+        userId,
+      }
+    );
   } catch (error) {
-    logger.error("CRITICAL: Airtime reversal failed!", {
-      reference,
-      userId,
-      amount,
-      error: error.message,
-    });
-    // TODO: Alert admin via email/SMS
+    logger.error(
+      "CRITICAL: Airtime reversal failed",
+      {
+        reference,
+        userId,
+        amount,
+        error: error.message,
+      }
+    );
   }
 }
 
-// ========================
-// Requery Airtime Transaction
-// ========================
-export async function requeryAirtimeTransaction(reference) {
+/* -------------------------------------------------------------------------- */
+/*                        REQUERY AIRTIME TRANSACTION                         */
+/* -------------------------------------------------------------------------- */
+
+export async function requeryAirtimeTransaction(
+  reference
+) {
   try {
-    const response = await vtpassApi.post("/requery", {
-      request_id: reference,
-    });
+    const response =
+      await vtpassApi.post(
+        "/requery",
+        {
+          request_id: reference,
+        }
+      );
 
     return response.data;
   } catch (error) {
-    logger.error("Airtime requery failed", {
-      reference,
-      error: error.message,
-    });
-    throw new Error("Unable to verify airtime transaction status.");
+    logger.error(
+      "Airtime requery failed",
+      {
+        reference,
+        error: error.message,
+      }
+    );
+
+    throw new Error(
+      "Unable to verify airtime transaction status."
+    );
   }
 }
 
-// ========================
-// Get Airtime Transaction History
-// ========================
-export async function getAirtimeHistory(userId, options = {}) {
-  const { query } = await import("../database/db.js");
-  const { page = 1, limit = 20, network } = options;
-  const offset = (page - 1) * limit;
+/* -------------------------------------------------------------------------- */
+/*                         GET AIRTIME HISTORY                                */
+/* -------------------------------------------------------------------------- */
 
-  let whereClause = "WHERE user_id = $1 AND type = $2";
-  const params = [userId, TRANSACTION_TYPES.AIRTIME_PURCHASE];
+export async function getAirtimeHistory(
+  userId,
+  options = {}
+) {
+  const {
+    page = 1,
+    limit = 20,
+    network,
+  } = options;
+
+  const offset =
+    (page - 1) * limit;
+
+  let whereClause =
+    "WHERE user_id = $1 AND type = $2";
+
+  const params = [
+    userId,
+    TRANSACTION_TYPES.AIRTIME_PURCHASE,
+  ];
+
   let paramIndex = 3;
 
   if (network) {
     whereClause += ` AND metadata->>'network' = $${paramIndex}`;
-    params.push(network.toLowerCase());
+
+    params.push(
+      network.toLowerCase()
+    );
+
     paramIndex++;
   }
 
-  const countResult = await query(
-    `SELECT COUNT(*) FROM transactions ${whereClause}`,
-    params
-  );
+  const countResult =
+    await query(
+      `
+        SELECT COUNT(*)
+        FROM transactions
+        ${whereClause}
+      `,
+      params
+    );
 
-  const dataResult = await query(
-    `SELECT * FROM transactions ${whereClause}
-     ORDER BY created_at DESC
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset]
-  );
+  const dataResult =
+    await query(
+      `
+        SELECT *
+        FROM transactions
+        ${whereClause}
+        ORDER BY created_at DESC
+        LIMIT $${paramIndex}
+        OFFSET $${paramIndex + 1}
+      `,
+      [
+        ...params,
+        limit,
+        offset,
+      ]
+    );
 
   return {
-    transactions: dataResult.rows,
-    total: parseInt(countResult.rows[0].count),
+    transactions:
+      dataResult.rows,
+
+    total: parseInt(
+      countResult.rows[0].count
+    ),
+
     page,
+
     limit,
   };
 }
 
-// ========================
-// Normalize Phone Number
-// ========================
+/* -------------------------------------------------------------------------- */
+/*                           NORMALIZE PHONE                                  */
+/* -------------------------------------------------------------------------- */
+
 function normalizePhone(phone) {
-  // Convert 08012345678 → 2348012345678
+  // 08012345678 => 2348012345678
   if (phone.startsWith("0")) {
     return `234${phone.slice(1)}`;
   }
 
-  // Strip + if present
+  // +2348012345678 => 2348012345678
   if (phone.startsWith("+234")) {
     return phone.slice(1);
   }
@@ -372,31 +678,75 @@ function normalizePhone(phone) {
   return phone;
 }
 
-// ========================
-// Detect Network from Phone
-// ========================
-export function detectNetworkFromPhone(phone) {
-  const normalized = phone.replace("+234", "0").replace(/^234/, "0");
+/* -------------------------------------------------------------------------- */
+/*                        DETECT NETWORK FROM PHONE                           */
+/* -------------------------------------------------------------------------- */
+
+export function detectNetworkFromPhone(
+  phone
+) {
+  const normalized =
+    phone
+      .replace("+234", "0")
+      .replace(/^234/, "0");
 
   const prefixMap = {
     mtn: [
-      "0803", "0806", "0810", "0813",
-      "0814", "0816", "0903", "0906",
-      "0913", "0916",
+      "0803",
+      "0806",
+      "0810",
+      "0813",
+      "0814",
+      "0816",
+      "0903",
+      "0906",
+      "0913",
+      "0916",
     ],
-    glo: ["0805", "0807", "0811", "0815", "0905", "0915"],
+
+    glo: [
+      "0805",
+      "0807",
+      "0811",
+      "0815",
+      "0905",
+      "0915",
+    ],
+
     airtel: [
-      "0802", "0808", "0812", "0901",
-      "0902", "0907",
+      "0802",
+      "0808",
+      "0812",
+      "0901",
+      "0902",
+      "0907",
     ],
-    etisalat: ["0809", "0817", "0818", "0908", "0909"],
+
+    etisalat: [
+      "0809",
+      "0817",
+      "0818",
+      "0908",
+      "0909",
+    ],
   };
 
-  for (const [network, prefixes] of Object.entries(prefixMap)) {
-    if (prefixes.some((p) => normalized.startsWith(p))) {
+  for (const [
+    network,
+    prefixes,
+  ] of Object.entries(
+    prefixMap
+  )) {
+    if (
+      prefixes.some((prefix) =>
+        normalized.startsWith(
+          prefix
+        )
+      )
+    ) {
       return network;
     }
   }
 
-  return null; // Unknown network
+  return null;
 }
