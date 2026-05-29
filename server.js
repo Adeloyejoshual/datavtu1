@@ -11,6 +11,7 @@ import airtimeRoutes from "./routes/airtime.routes.js";          // ← Add
 import transactionRoutes from "./routes/transaction.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import webhookRoutes from "./routes/webhook.routes.js";
+import electricityRoutes from "./routes/electricity.routes.js";
 
 import { apiLimiter } from "./middleware/rateLimiter.middleware.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
@@ -39,7 +40,8 @@ app.use("/api/", apiLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/data", dataRoutes);
-app.use("/api/airtime", airtimeRoutes);                          // ← Add
+app.use("/api/airtime", airtimeRoutes);
+app.use("/api/electricity", electricityRoutes);                          // ← Add
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/webhooks", webhookRoutes);
