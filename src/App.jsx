@@ -4,6 +4,7 @@ import useAuthStore from "./store/useAuthStore.js";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout.jsx";
+import AdminLayout from "./pages/admin/AdminLayout.jsx";
 
 // Auth pages
 import Login from "./pages/auth/Login.jsx";
@@ -22,22 +23,58 @@ import Betting from "./pages/services/Betting.jsx";
 // Wallet
 import Transactions from "./pages/wallet/Transactions.jsx";
 
-// Referral
+// Referral + Profile
 import Referral from "./pages/referral/Referral.jsx";
-
-// Profile
 import Profile from "./pages/profile/Profile.jsx";
 
-// Protected Route
+// Admin Pages
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminUsers from "./pages/admin/AdminUsers.jsx";
+import AdminTransactions from "./pages/admin/AdminTransactions.jsx";
+import AdminAnalytics from "./pages/admin/AdminAnalytics.jsx";
+import AdminSettings from "./pages/admin/AdminSettings.jsx";
+
+// =============================
+// Route Guards
+// =============================
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 
-// Public Route (redirect if logged in)
+function AdminRoute({ children }) {
+  const { isAuthenticated, user } = useAuthStore();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== "admin") return <Navigate to="/" replace />;
+  return children;
+}
+
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
   return !isAuthenticated ? children : <Navigate to="/" replace />;
+}
+
+// =============================
+// Layout Wrappers
+// =============================
+function UserPage({ component: Component }) {
+  return (
+    <ProtectedRoute>
+      <DashboardLayout>
+        <Component />
+      </DashboardLayout>
+    </ProtectedRoute>
+  );
+}
+
+function AdminPage({ component: Component }) {
+  return (
+    <AdminRoute>
+      <AdminLayout>
+        <Component />
+      </AdminLayout>
+    </AdminRoute>
+  );
 }
 
 export default function App() {
@@ -51,6 +88,8 @@ export default function App() {
             borderRadius: "12px",
             fontFamily: "Inter, sans-serif",
             fontSize: "14px",
+            background: "#fff",
+            color: "#1f2937",
           },
           success: {
             iconTheme: { primary: "#10b981", secondary: "#fff" },
@@ -62,125 +101,37 @@ export default function App() {
       />
 
       <Routes>
-        {/* Public Routes */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          }
-        />
+        {/* ========================= */}
+        {/* Public Routes (No Auth) */}
+        {/* ========================= */}
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Dashboard />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+        {/* ========================= */}
+        {/* User Routes (Auth Required) */}
+        {/* ========================= */}
+        <Route path="/" element={<UserPage component={Dashboard} />} />
+        <Route path="/data" element={<UserPage component={Data} />} />
+        <Route path="/airtime" element={<UserPage component={Airtime} />} />
+        <Route path="/electricity" element={<UserPage component={Electricity} />} />
+        <Route path="/cable" element={<UserPage component={Cable} />} />
+        <Route path="/betting" element={<UserPage component={Betting} />} />
+        <Route path="/transactions" element={<UserPage component={Transactions} />} />
+        <Route path="/referrals" element={<UserPage component={Referral} />} />
+        <Route path="/profile" element={<UserPage component={Profile} />} />
 
-        <Route
-          path="/data"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Data />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+        {/* ========================= */}
+        {/* Admin Routes (Admin Only) */}
+        {/* ========================= */}
+        <Route path="/admin" element={<AdminPage component={AdminDashboard} />} />
+        <Route path="/admin/users" element={<AdminPage component={AdminUsers} />} />
+        <Route path="/admin/transactions" element={<AdminPage component={AdminTransactions} />} />
+        <Route path="/admin/analytics" element={<AdminPage component={AdminAnalytics} />} />
+        <Route path="/admin/settings" element={<AdminPage component={AdminSettings} />} />
 
-        <Route
-          path="/airtime"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Airtime />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/electricity"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Electricity />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/cable"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Cable />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/betting"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Betting />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/transactions"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Transactions />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/referrals"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Referral />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Profile />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
+        {/* ========================= */}
         {/* Catch-all */}
+        {/* ========================= */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
