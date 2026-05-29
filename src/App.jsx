@@ -4,39 +4,33 @@ import useAuthStore from "./store/useAuthStore.js";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout.jsx";
-import AdminLayout from "./pages/admin/AdminLayout.jsx";
+import AdminLayout from "./admin/AdminLayout.jsx";
 
-// Auth pages
-import Login from "./pages/auth/Login.jsx";
-import Register from "./pages/auth/Register.jsx";
+// Auth
+import Login from "./auth/Login.jsx";
+import Register from "./auth/Register.jsx";
 
-// Dashboard
-import Dashboard from "./pages/dashboard/Dashboard.jsx";
-
-// Services
-import Data from "./pages/services/Data.jsx";
-import Airtime from "./pages/services/Airtime.jsx";
-import Electricity from "./pages/services/Electricity.jsx";
-import Cable from "./pages/services/Cable.jsx";
-import Betting from "./pages/services/Betting.jsx";
-
-// Wallet
-import Transactions from "./pages/wallet/Transactions.jsx";
-
-// Referral + Profile
-import Referral from "./pages/referral/Referral.jsx";
-import Profile from "./pages/profile/Profile.jsx";
+// User Pages
+import Dashboard from "./dashboard/Dashboard.jsx";
+import Data from "./services/Data.jsx";
+import Airtime from "./services/Airtime.jsx";
+import Electricity from "./services/Electricity.jsx";
+import Cable from "./services/Cable.jsx";
+import Betting from "./services/Betting.jsx";
+import Transactions from "./wallet/Transactions.jsx";
+import Referral from "./referral/Referral.jsx";
+import Profile from "./profile/Profile.jsx";
 
 // Admin Pages
-import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
-import AdminUsers from "./pages/admin/AdminUsers.jsx";
-import AdminTransactions from "./pages/admin/AdminTransactions.jsx";
-import AdminAnalytics from "./pages/admin/AdminAnalytics.jsx";
-import AdminSettings from "./pages/admin/AdminSettings.jsx";
+import AdminDashboard from "./admin/AdminDashboard.jsx";
+import AdminUsers from "./admin/AdminUsers.jsx";
+import AdminTransactions from "./admin/AdminTransactions.jsx";
+import AdminAnalytics from "./admin/AdminAnalytics.jsx";
+import AdminSettings from "./admin/AdminSettings.jsx";
 
-// =============================
+// =====================
 // Route Guards
-// =============================
+// =====================
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? children : <Navigate to="/login" replace />;
@@ -54,9 +48,9 @@ function PublicRoute({ children }) {
   return !isAuthenticated ? children : <Navigate to="/" replace />;
 }
 
-// =============================
+// =====================
 // Layout Wrappers
-// =============================
+// =====================
 function UserPage({ component: Component }) {
   return (
     <ProtectedRoute>
@@ -77,6 +71,9 @@ function AdminPage({ component: Component }) {
   );
 }
 
+// =====================
+// App
+// =====================
 export default function App() {
   return (
     <BrowserRouter>
@@ -88,8 +85,7 @@ export default function App() {
             borderRadius: "12px",
             fontFamily: "Inter, sans-serif",
             fontSize: "14px",
-            background: "#fff",
-            color: "#1f2937",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           },
           success: {
             iconTheme: { primary: "#10b981", secondary: "#fff" },
@@ -101,15 +97,25 @@ export default function App() {
       />
 
       <Routes>
-        {/* ========================= */}
-        {/* Public Routes (No Auth) */}
-        {/* ========================= */}
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+        {/* ── Public ── */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          }
+        />
 
-        {/* ========================= */}
-        {/* User Routes (Auth Required) */}
-        {/* ========================= */}
+        {/* ── User ── */}
         <Route path="/" element={<UserPage component={Dashboard} />} />
         <Route path="/data" element={<UserPage component={Data} />} />
         <Route path="/airtime" element={<UserPage component={Airtime} />} />
@@ -120,18 +126,14 @@ export default function App() {
         <Route path="/referrals" element={<UserPage component={Referral} />} />
         <Route path="/profile" element={<UserPage component={Profile} />} />
 
-        {/* ========================= */}
-        {/* Admin Routes (Admin Only) */}
-        {/* ========================= */}
+        {/* ── Admin ── */}
         <Route path="/admin" element={<AdminPage component={AdminDashboard} />} />
         <Route path="/admin/users" element={<AdminPage component={AdminUsers} />} />
         <Route path="/admin/transactions" element={<AdminPage component={AdminTransactions} />} />
         <Route path="/admin/analytics" element={<AdminPage component={AdminAnalytics} />} />
         <Route path="/admin/settings" element={<AdminPage component={AdminSettings} />} />
 
-        {/* ========================= */}
-        {/* Catch-all */}
-        {/* ========================= */}
+        {/* ── Catch All ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
