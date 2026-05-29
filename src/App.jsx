@@ -3,7 +3,7 @@ import { Toaster } from "react-hot-toast";
 import useAuthStore from "./store/useAuthStore.js";
 
 // Layouts
-import DashboardLayout from "./pages/components/layout/DashboardLayout.jsx";
+import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import AdminLayout from "./pages/admin/AdminLayout.jsx";
 
 // Auth
