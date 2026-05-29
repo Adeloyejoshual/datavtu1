@@ -71,7 +71,10 @@ export const NETWORKS = {
 // ======================================================
 
 export const VTPASS_SERVICE_IDS = {
+  // =========================
   // Data
+  // =========================
+
   MTN_DATA: "mtn-data",
 
   GLO_DATA: "glo-data",
@@ -80,7 +83,10 @@ export const VTPASS_SERVICE_IDS = {
 
   ETISALAT_DATA: "etisalat-data",
 
+  // =========================
   // Airtime
+  // =========================
+
   MTN_AIRTIME: "mtn",
 
   GLO_AIRTIME: "glo",
@@ -89,14 +95,20 @@ export const VTPASS_SERVICE_IDS = {
 
   ETISALAT_AIRTIME: "etisalat",
 
+  // =========================
   // Cable
+  // =========================
+
   DSTV: "dstv",
 
   GOTV: "gotv",
 
   STARTIMES: "startimes",
 
+  // =========================
   // Electricity
+  // =========================
+
   IKEDC: "ikeja-electric",
 
   EKEDC: "eko-electric",
@@ -109,7 +121,10 @@ export const VTPASS_SERVICE_IDS = {
 
   PHED: "portharcourt-electric",
 
+  // =========================
   // Betting
+  // =========================
+
   BET9JA: "bet9ja",
 
   SPORTYBET: "sportybet",
@@ -218,6 +233,12 @@ export const BETTING_PROVIDERS = {
 
   MERRYBET: "merrybet",
 };
+
+// ======================================================
+// Backward Compatibility Alias
+// ======================================================
+
+export const BETTING_PLATFORMS = BETTING_PROVIDERS;
 
 // ======================================================
 // Referral Settings
